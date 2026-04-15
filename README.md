@@ -1,5 +1,5 @@
 <h1 align="center"> Advancing Graph Foundation Models: A Data-Centric Perspective </h1>
-
+find model checkpoints at https://huggingface.co/Aizelsheikh/Advanced-DCGFM (hard prune 70, soft prune 50)
 This is the code repository for our KDD 2025 paper, "Advancing Graph Foundation Models: A Data-Centric Perspective".
 
 **DCGFM** is a play-and-plug approach for data-centric GFM from the data pruning perspective. First, to mitigate redundancy and noise issues, a model-agnostic hard pruning module is employed to filter out less informative subgraphs. Second, to improve efficiency during training, a model-aware soft pruning module is utilized to filter out several pre-training subgraphs that contribute less to the current GFM in each epoch.
