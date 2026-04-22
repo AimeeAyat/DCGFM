@@ -1,0 +1,68 @@
+What soft pruning currently does — InfoBatch
+Every training step: the per-graph BCE loss is computed and stored as each graph's score.
+
+Every epoch end (prune()):
+
+
+All graphs split by:
+  score < mean  →  "well-learned" (easy, low loss)
+  score ≥ mean  →  "hard" (high loss, kept always)
+
+Well-learned graphs:
+  → randomly keep keep_ratio fraction (= 1 - prune_ratio = 50%)
+  → kept ones get weight upscaled by 1/keep_ratio to correct bias
+
+Next epoch trains on: all hard graphs + 50% of well-learned graphs
+Two parameters:
+
+prune_ratio=0.5 → drop 50% of easy graphs each epoch
+delta=0.875 → used in the sampler scheduling (how aggressively to prune early vs late epochs)
+The only signal used is: raw training loss per graph.
+
+What you could change
+1. Scoring signal (biggest impact)
+Signal	What it measures	Change needed
+Raw loss (current)	How wrong the prediction is right now	Nothing
+Gradient norm	How much a graph actually updates the model weights	Compute grad.norm() per graph in training_step
+EL2N (error L2 norm)	L2 norm of softmax error vector — more stable than loss	Replace scalar loss with vector norm
+Forgetting events	Count how many times graph flips from correct→wrong	Track per-graph accuracy history
+Loss EMA	Exponential moving average over epochs — less noisy	Replace self.scores[i] = loss with α*old + (1-α)*new
+Easiest high-value change: replace single-epoch loss with EMA of loss across epochs. Currently a graph that had one bad batch looks "hard" even if it's usually easy. EMA smooths this:
+
+
+# in update(), replace:
+self.scores[cur_batch_indices.cpu().long()] = loss_val.cpu()
+# with:
+alpha = 0.7
+self.scores[cur_batch_indices.cpu().long()] = (
+    alpha * self.scores[cur_batch_indices.cpu().long()] +
+    (1 - alpha) * loss_val.cpu()
+)
+2. Pruning threshold (medium impact)
+Current threshold is global mean across all tasks. Problem: arxiv graphs and mol graphs have different loss scales,
+ so mol graphs (which tend to have higher loss due to multi-label difficulty) might never get pruned.
+
+Fix: normalize scores per task before applying threshold:
+
+
+# per-task z-score normalization before prune()
+for task_start, task_end in task_boundaries:
+    task_scores = self.scores[task_start:task_end]
+    self.scores[task_start:task_end] = (task_scores - task_scores.mean()) / task_scores.std()
+3. Curriculum scheduling (structural change)
+Current: same keep_ratio every epoch — drops 50% of easy graphs from epoch 1.
+
+Better: start by keeping more easy graphs (warm up), then get stricter:
+
+
+Epoch 1-5:   keep_ratio = 0.9  (only drop 10% of easy)
+Epoch 6-15:  keep_ratio = 0.6
+Epoch 16-30: keep_ratio = 0.5  (standard)
+This lets the model stabilize before aggressive pruning.
+
+4. What won't help much
+Replacing the loss signal with a large model's output — overkill, same problem as Gemma for hard pruning
+Very aggressive prune_ratio > 0.7 — the model can destabilize if too many graphs are dropped, especially for rare-class mol tasks
+Recommended change for your paper
+The EMA on scores is the cleanest improvement — small code change in ofa_datasets_combine.py:983, mathematically motivated (reduces noise),
+ and directly addresses a known weakness of InfoBatch. It's novel enough to mention as a contribution if it improves results.

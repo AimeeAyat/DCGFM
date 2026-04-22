@@ -1,0 +1,208 @@
+Think of GIN as:
+“Each node repeatedly mixes its own info with its neighbors, then the whole graph is summarized into one fingerprint.”
+
+1. GCN (Graph Convolutional Network)
+“Each node becomes the average of its neighbors”
+
+Problem:
+Different structures can collapse to same representation
+Not very expressive
+
+2. GraphSAGE
+“Node keeps its identity + learns from neighbors”
+
+Advantage over GCN:
+Doesn’t mix self + neighbors blindly
+
+3. GIN (Graph Isomorphism Network)
+
+What it does:
+Uses SUM aggregation (not mean)
+Adds weighted self-feature
+Passes through MLP (not just linear)
+Key properties:
+Most expressive
+Can distinguish graph structures (WL test power)
+Learns structure differences precisely
+Intuition:
+
+“Exact counting + powerful transformation”
+
+| Feature               | GCN                  | GraphSAGE         | GIN                    |
+| --------------------- | -------------------- | ----------------- | ---------------------- |
+| Aggregation           | Mean (normalized)    | Mean / Max / LSTM | **Sum**                |
+| Self handling         | Mixed with neighbors | **Concatenated**  | Weighted (1+ε)         |
+| Transformation        | Linear               | Linear            | **MLP (nonlinear)**    |
+| Expressiveness        | Low                  | Medium            | **High (WL powerful)** |
+| Structure sensitivity | Weak                 | Medium            | **Strong**             |
+
+
+CRITICAL DIFFERENCE
+Mean vs Sum
+GCN / GraphSAGE:
+[1,1,1] → mean = 1  
+[2,2]   → mean = 2  
+
+[1,1,1] vs [1,1]
+→ both mean = 1 ❌ indistinguishable
+
+GIN
+sum([1,1,1]) = 3  
+sum([1,1])   = 2  
+
+
+
+-----------------------------------------------------------------------------------------------------
+
+No — NOI (Node of Interest) is a special prompt node added to each subgraph at inference time to tell the GNN what task to perform (classify this node? predict this link?). It's not for validation/testing — it's a task-conditioning mechanism present in every forward pass.
+
+NOI is added by the get_edge_list() function in OFA/data/single_graph/gen_data.py. The rules are:
+
+Connections NOI gets:
+
+n2n edges from all feature nodes → NOI (context flows into it)
+n2c edges from NOI → class nodes (NOI queries each possible class)
+c2n edges from class nodes → NOI (class text flows back)
+f2n / n2f edges connecting NOI to the prompt text node (task description)
+Rules:
+
+NOI is always a single node per subgraph — the one being queried (target node, head/tail entity, or virtual graph-level node)
+It sits between the subgraph (feature nodes) and the class nodes — acting as a bottleneck
+For lr_* (few-shot) tasks — no class nodes are attached; NOI just aggregates the subgraph for embedding comparison
+For KG tasks (e2e_link) — NOI connects to both head and tail entity nodes, plus 237 relation-type class nodes
+For graph-level tasks (chemmol) — NOI connects to all atom nodes in the molecule graph
+So the rule is: NOI = target of prediction + bridge to task description + bridge to answer space.
+
+----------------------------------------------------------------------------------------------------------------------------
+
+Important
+ NOI aggregates the subgraph into one vector via message passing — after GNN layers, the NOI embedding contains a compressed summary of the entire neighborhood.
+Why it doesn't make it too lengthy:
+
+GNN message passing is parallel — all nodes update simultaneously, not sequentially
+The subgraph is already small (2-hop neighborhood, capped at ~30 nodes) — not the full graph
+NOI just participates in the same message passing rounds as every other node — no extra cost
+What NOI ends up containing after GNN:
+
+
+NOI embedding ← aggregated messages from:
+  - feature nodes (local graph structure + text)
+  - class nodes (what categories are possible)
+  - prompt node (what task to perform)
+Then prediction is simply:
+
+
+similarity(NOI_embedding, class_node_embedding) → highest = predicted class
+So NOI is essentially a learned query vector — the GNN writes the answer into it by the final layer. The subgraph is the context, NOI is the question, and its final embedding is the answer.
+
+
+
+
+
+Your dataset	How it's covered	Role
+ogbn-arxiv (N)	arxiv_fs	Train + Test
+PubMed (N)	Inside arxiv_fs eval set (pubmed_fs_30)	Test only
+PCBA (G)	Inside mol_fs eval set (chempcba_fs_20)	Test only
+HIV (G)	Inside mol_fs eval set (chemhiv_fs_20)	Test only
+FB15K237 (L)	FB15K237_fs	Train + Test
+WN18RR (L)	Inside FB15K237_fs eval set (WN18RR_fs_50/100)	Test only
+Training happens on arxiv + FB15K237 + chemblpre (mol pre-training). The others are zero-shot transfer test targets.
+
+
+
+
+# to run full pipeline
+Only one change needed — enable soft pruning
+Remove --prune_ratio 0.0 from your command. The yaml default is 0.5 (50% soft pruning per epoch). No yaml or task_names changes needed.
+
+
+cd OFA
+$env:WANDB_MODE="disabled"
+C:/Users/salma/anaconda3/python.exe run_cdm.py `
+  --control_gpu --gpus 0 `
+  --override yamls/soft_and_hard.yaml `
+  --hard_pruning_mode hard_prune_api `
+  --hard_pruning_reverse `
+  --hard_pruning_ratio 0.7 `
+  --prune_ratio 0.3 `
+  --save_model
+
+
+
+What the GIN actually does here
+The GIN in hard pruning is tiny — 5 layers, 128-dim, ~500K parameters. 
+Its only job is to run Deep SVDD: map graphs into a hypersphere, score each graph by distance from center, and rank them. 
+It runs once, before training starts. It doesn't need to be smart — it just needs to detect structural redundancy.
+
+
+
+
+
+
+
+
+
+What was built
+New file: graphgps_prune_module.py
+
+GraphGPS — encoder: Linear projection → N × (GINConv + MultiHead Attention) → global_mean_pool
+GraphGPS_Hard_Prune — DeepSVDD wrapper (identical logic to GIN_Hard_Prune)
+graphgps_hard_prune_api — public function matching the hard_prune_api signature exactly
+Modified: run_cdm.py:42 — one import line added, nothing else touched
+
+Original hard_prune_module.py — completely untouched
+
+Run command
+
+cd OFA
+$env:WANDB_MODE="disabled"
+C:/Users/salma/anaconda3/python.exe run_cdm.py `
+  --control_gpu --gpus 0 `
+  --override yamls/soft_and_hard.yaml `
+  --hard_pruning_mode graphgps_hard_prune_api `
+  --hard_pruning_reverse `
+  --hard_pruning_ratio 0.7 `
+  --save_model
+Only --hard_pruning_mode changes. Everything else stays the same.
+
+
+
+
+Done. --task_config is now wired up. To run with the paper's exact 6-dataset evaluation:
+
+
+new config to check only paper results
+cd OFA
+$env:WANDB_MODE="disabled"
+C:/Users/salma/anaconda3/python.exe run_cdm.py `
+  --control_gpu --gpus 0 `
+  --override yamls/soft_and_hard.yaml `
+  --task_config configs/task_config_paper.yaml `
+  --hard_pruning_mode hard_prune_api `
+  --hard_pruning_reverse `
+  --hard_pruning_ratio 0.7 `
+  --save_model `
+  --ckpt_path "G:\Rabia-Salman\DCGFM\OFA\saved_exp\2026-04-15_21-22-57 (hard 70, soft 50)\OFA_dcgfm\ylr5n6u5\checkpoints\last.ckpt"
+
+
+
+run from checkpoint 
+
+cd OFA
+$env:WANDB_MODE="disabled"
+C:/Users/salma/anaconda3/python.exe run_cdm.py `
+  --control_gpu --gpus 0 `
+  --override yamls/soft_and_hard.yaml `
+  --hard_pruning_mode hard_prune_api `
+  --hard_pruning_reverse `
+  --hard_pruning_ratio 0.7 `
+  --save_model `
+  --ckpt_path "G:/Rabia-Salman/DCGFM/OFA/saved_exp/2026-04-15_21-22-57/OFA_dcgfm/ylr5n6u5/checkpoints/last.ckpt"
+
+
+
+
+
+
+
+
