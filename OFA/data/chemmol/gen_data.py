@@ -30,9 +30,12 @@ def load_prompt_json(name):
 
 def get_local_text(name):
     print("gen text")
-    # 改为本地数据集
-    cache_dir = os.path.join(os.path.dirname(__file__), "../../cache_data/dataset/datasets--haitengzhao--molecule_property_instruction")
-    data = load_dataset(path=cache_dir, split=NAME_TO_SPLIT[name])
+    # claude added code: load offline from processed Arrow cache; original path used HF hub
+    # hard-links which are unreadable on Windows (WinError 1920)
+    import os as _os
+    _os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
+    cache_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "../../cache_data/dataset"))
+    data = load_dataset("haitengzhao/molecule_property_instruction", split=NAME_TO_SPLIT[name], cache_dir=cache_dir)
     data_dict = {"label": data["label"], "task_index": data["task_index"], "molecule_index": data["molecule_index"], }
     pd_data = pd.DataFrame.from_dict(data_dict)
     cls_data = pd_data[np.logical_not(pd.isna(pd_data["task_index"]))]
@@ -49,10 +52,16 @@ def get_local_text(name):
     task2index = {k: [i, prompt_text[k]] for i, k in enumerate(prompt_text)}
     label_text = get_label_texts(task2index)
     graphs = []
+    # claude added code: skip None/invalid SMILES that cause RDKit NoneType crash
+    from rdkit import Chem as _Chem
+    tasks_list = list(tasks)
+    labels_list = list(labels)
     for i in range(len(mol)):
+        if mol[i] is None or _Chem.MolFromSmiles(mol[i]) is None:
+            continue
         graph = smiles2graph(mol[i])
-        task_lst = [task2index[v][0] for v in tasks[i].split(",")]
-        label_lst = [1 if v == "Yes" else 0 for v in labels[i].split(",")]
+        task_lst = [task2index[v][0] for v in tasks_list[i].split(",")]
+        label_lst = [1 if v == "Yes" else 0 for v in labels_list[i].split(",")]
         cur_label = np.zeros(len(task2index))
         cur_label[:] = np.nan
         cur_label[task_lst] = label_lst

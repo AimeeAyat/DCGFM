@@ -189,5 +189,5 @@ def open_and_load_pickle(filename):
 
 
 def load_yaml(dir):
-    with open(dir, "r") as stream:
+    with open(dir, "r", encoding="utf-8") as stream:  # claude added code: utf-8 for Chinese comments on Windows
         return yaml.safe_load(stream)

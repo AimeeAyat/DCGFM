@@ -162,4 +162,8 @@ cython_debug/
 
 
 cache_data
-saved_exp
+# Keep saved_exp command files and README; exclude large checkpoint/cache files
+saved_exp/**/checkpoints/
+saved_exp/**/cache_data/
+saved_exp/**/*.ckpt
+saved_exp/**/*.pkl

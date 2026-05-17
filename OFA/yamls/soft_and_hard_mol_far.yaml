@@ -1,0 +1,18 @@
+batch_size: 256
+eval_batch_size: 256
+dropout: 0.0
+lr: 0.0005
+num_epochs: 30
+num_layers: 5
+JK : "none"
+task_names:
+  - "mol_fs"
+d_multiple:
+  - 1
+d_min_ratio:
+  - 1
+exp_name: "OFA_mol_far_prune_"
+reload_freq: 0
+limit_val_batches: 0
+checkpoint_interval: 10
+fs_sample_size: 60000

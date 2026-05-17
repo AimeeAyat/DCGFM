@@ -7,7 +7,8 @@ lr: 0.0001
 l2: 0
 num_epochs: 50
 batch_size: 128
-num_workers: 4
+# claude added code: 0 for Windows (multiprocessing spawn crashes with num_workers > 0)
+num_workers: 0
 seed: 1
 data_path:
 offline_log: False

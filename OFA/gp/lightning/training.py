@@ -75,6 +75,7 @@ def lightning_fit(
     fs_sample_size=2000,
     checkpoint_interval=5,
     strategy=None,
+    ckpt_path=None,
 ):
     start_time = time.time()
     callbacks = []
@@ -108,7 +109,7 @@ def lightning_fit(
         check_val_every_n_epoch=val_interval,
         limit_val_batches=limit_val_batches, 
     )
-    trainer.fit(model, datamodule=data_module)
+    trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path)
     total_time = time.time() - start_time
     hours = total_time // 3600
     minutes = (total_time % 3600) // 60

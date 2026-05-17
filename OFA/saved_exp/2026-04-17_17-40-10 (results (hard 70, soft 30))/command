@@ -1,0 +1,75 @@
+JK: none
+batch_size: 256
+big_data_cache_dir: ./cache_data/ofa_dataset
+checkpoint_interval: 10
+ckpt_path: G:\Rabia-Salman\DCGFM\OFA\saved_exp\2026-04-16_11-38-48\OFA_dcgfm\3bmyp7wz\checkpoints\last.ckpt
+control_gpu: true
+d_min_ratio:
+- 1
+- 1
+- 1
+d_multiple:
+- 1
+- 1
+- 1
+data_path: null
+delta: 1.0
+div_factor: 25
+dropout: 0.0
+emb_dim: 768
+eval_batch_size: 256
+eval_sample_size: -1
+exp_name: OFA_soft_and_hard_
+final_div: 10000
+fs_sample_size: 60000
+gpus: '0'
+hard_pruning_epochs: 25
+hard_pruning_joint: false
+hard_pruning_mode: hard_prune_api
+hard_pruning_ratio: 0.7
+hard_pruning_reverse: true
+l2: 0
+limit_val_batches: 0
+llm_b_size: 1
+llm_name: ST
+load_best: false
+load_texts: false
+lr: 0.0005
+max_lr: 0.05
+max_nodes_per_hop: 100
+num_bases: 4
+num_epochs: 30
+num_layers: 5
+num_workers: 0
+offline_log: false
+opts: []
+override: yamls/soft_and_hard.yaml
+pct_start: 0.3
+prune_ratio: 0.3
+reload_freq: 0
+rwpe: null
+save_model: true
+seed: 1
+task_config: configs/task_config.yaml
+task_names:
+- arxiv_fs
+- FB15K237_fs
+- mol_fs
+test_rep: 10
+train_sample_size: -1
+use_onecycle: false
+val_interval: 1
+
+
+test_arxiv_fs_50\acc:0.459100±0.008780
+test_arxiv_fs_30\acc:0.605900±0.006826
+test_cora_fs_20\acc:0.524150±0.013390
+test_cora_fs_70\acc:0.151650±0.006738
+test_pubmed_fs_30\acc:0.311350±0.013314
+test_wikics_fs_100\acc:0.102800±0.006038
+test_FB15K237_fs_100\acc:0.517350±0.013377
+test_FB15K237_fs_200\acc:0.368400±0.009954
+test_WN18RR_fs_50\acc:0.222450±0.005194
+test_WN18RR_fs_100\acc:0.109650±0.006329
+test_chemhiv_fs_20\auc:0.482478±0.016905
+test_chempcba_fs_20\aucmulti:0.542143±0.009189

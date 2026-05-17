@@ -1,0 +1,112 @@
+JK: none
+batch_size: 256
+big_data_cache_dir: ./cache_data/ofa_dataset
+checkpoint_interval: 10
+ckpt_path: null
+control_gpu: false
+d_min_ratio:
+- 1
+d_multiple:
+- 1
+data_path: null
+delta: 1.0
+div_factor: 25
+dropout: 0.1
+emb_dim: 768
+eval_batch_size: 256
+eval_sample_size: -1
+exp_name: OFA_mol_vn_
+final_div: 10000
+fs_sample_size: 60000
+gpus: 0,1
+hard_pruning_epochs: 25
+hard_pruning_joint: false
+hard_pruning_mode: hard_prune_api
+hard_pruning_ratio: 0.7
+hard_pruning_reverse: false
+l2: 0
+limit_val_batches: 0
+llm_b_size: 1
+llm_name: ST
+load_best: false
+load_texts: false
+lr: 0.0005
+max_lr: 0.05
+max_nodes_per_hop: 100
+num_bases: 4
+num_epochs: 30
+num_layers: 10
+num_workers: 0
+offline_log: false
+opts: []
+override: yamls/soft_and_hard_mol_vn.yaml
+pct_start: 0.3
+prune_ratio: 0.3
+reload_freq: 0
+rwpe: null
+save_model: false
+seed: 1
+task_config: configs/task_config.yaml
+task_names:
+- mol_fs
+test_rep: 10
+train_sample_size: -1
+use_onecycle: false
+val_interval: 1
+
+
+test_chemhiv_fs_20\loss/dataloader_idx_0:1.029913±0.019441
+test_chemhiv_fs_20\auc:0.558119±0.009780
+test_chempcba_fs_20\aucmulti:0.540943±0.014759
+
+
+Virtual Node — the concept
+The problem it solves
+In a standard GNN, information travels one hop per layer. Two atoms 13 bonds apart (median in your data) need 13 layers to communicate. With 10 layers, they never interact — the GNN is effectively blind to long-range structure.
+
+What a virtual node is
+A virtual node (VN) is a fake extra node added to every graph that is connected by an edge to every real node. It acts as a global message board.
+
+
+Before VN:                   After VN:
+
+   A — B — C — D               A — B — C — D
+                                 ↘   ↓   ↓  ↙
+                                    VN
+                                 ↗   ↑   ↑  ↖
+                                (connected to all)
+With the virtual node present, any two real nodes are at most 2 hops apart — through the VN — regardless of the molecule's actual diameter. A 3-layer GNN on a molecule with a VN has an effective receptive field of the entire graph.
+
+How information flows each layer
+
+Layer l:
+
+  1. Every real node sends its embedding to VN
+         vnode ← MLP( sum_all_nodes(h) + vnode_prev )
+
+  2. VN broadcasts its updated embedding back to every node
+         h_v  ←  h_v  +  vnode
+
+  3. Normal message passing runs on the real edges
+         h_v' ←  RGCN( h_v, neighbours )
+Step 2 is what was missing in the original codebase — the VN was being updated (step 1) but never broadcast back (step 2), making it completely inert.
+
+Intuition with a molecule example
+Say you have a drug molecule where a functional group on one end affects a ring system on the other end, 14 bonds away. With a 10-layer plain GNN:
+
+Layer 10 still can't connect atoms 14 hops apart
+The ring never "knows" about the functional group
+With VN:
+
+Layer 1: functional group embeds into VN (global summary)
+Layer 2: VN broadcasts global summary to ring atoms
+The ring now has information from the functional group
+Why your results are mixed
+Model	chemhiv AUC	chempcba AUC
+10-layer deep GIN	0.576	  0.497
+10-layer VN	      0.558  	0.541
+chempcba improved (+4.3%) — it has many parallel assays where global molecular properties matter, which VN captures well.
+
+chemhiv dropped (−1.8%) — HIV inhibition can depend on local structural features (specific binding pockets, chirality). The VN averages all atoms into one global vector, which can wash out the fine-grained local signal the plain GNN was picking up.
+
+This is the known VN tradeoff: it improves global-property tasks but can hurt tasks that rely on local substructure — the global averaging creates an over-smoothing effect at the graph level.

@@ -10,7 +10,10 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 import yaml
-from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
+try:
+    from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
+except ImportError:
+    get_fp32_state_dict_from_zero_checkpoint = None
 from sklearn.model_selection import StratifiedKFold
 
 from gp.utils.io import load_yaml
@@ -307,7 +310,8 @@ def setup_exp(params):
     if not osp.exists("./saved_exp"):
         os.mkdir("./saved_exp")
 
-    curtime = datetime.now()
+    curtime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    # curtime = datetime.now()
     exp_dir = osp.join("./saved_exp", str(curtime))
     os.mkdir(exp_dir)
     with open(osp.join(exp_dir, "command"), "w") as f:
@@ -352,5 +356,5 @@ def load_pretrained_state(model_dir, deepspeed=False):
         state_dict = get_fp32_state_dict_from_zero_checkpoint(model_dir)
         state_dict = {_remove_prefix(k, "_forward_module."): state_dict[k] for k in state_dict}
     else:
-        state_dict = torch.load(model_dir)["state_dict"]
+        state_dict = torch.load(model_dir, weights_only=False)["state_dict"]
     return state_dict

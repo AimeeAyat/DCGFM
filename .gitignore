@@ -1,0 +1,43 @@
+# Virtual environment
+dcgfm/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Large cached data — never commit
+OFA/cache_data/
+cache_data/
+processed/
+GraphCLIP/processed_data/
+OFA/data/single_graph/wikics/processed/
+OFA/data/single_graph/wikics/raw/
+
+# Model checkpoints and tensorboard events
+OFA/lightning_logs/*/checkpoints/
+OFA/lightning_logs/*/events.out.*
+OFA/saved_exp/*/OFA_dcgfm/*/checkpoints/last.ckpt
+OFA/saved_exp/*/OFA_dcgfm/*/checkpoints/cache_data/
+checkpoints/
+OFA/checkpoints/
+
+# Installers and binaries
+*.deb
+*.exe
+*.whl
+
+# Misc large or private files
+.claude/
+*.npz
+*.npy
+GraphCLIP/summary/*/
+
+# IDE
+.vscode/
+.idea/

@@ -291,7 +291,18 @@ class LLMModel(torch.nn.Module):
             TokenizerClass = AutoTokenizer
 
         elif self.llm_name == "ST":
-            model_path = os.path.join(self.cache_dir, "models--sentence-transformers--multi-qa-distilbert-cos-v1")
+            # claude added code: prefer plain (no-symlink) download over HF cache hard-links
+            # which are unreadable on Windows (WinError 1920 / EINVAL)
+            _plain = os.path.join(self.cache_dir, "st_model_plain")
+            _hf_cache = os.path.join(self.cache_dir, "models--sentence-transformers--multi-qa-distilbert-cos-v1")
+            _snapshots = os.path.join(_hf_cache, "snapshots")
+            if os.path.isdir(_plain) and os.path.isfile(os.path.join(_plain, "model.safetensors")):
+                model_path = _plain
+            elif os.path.isdir(_snapshots):
+                _snap = sorted(os.listdir(_snapshots))[-1]
+                model_path = os.path.join(_snapshots, _snap)
+            else:
+                model_path = _hf_cache
             ModelClass = AutoModel
             TokenizerClass = AutoTokenizer
 

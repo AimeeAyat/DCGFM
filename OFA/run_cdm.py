@@ -1,8 +1,15 @@
 import argparse
 import os
 from types import SimpleNamespace
-
 import torch
+
+# PyTorch 2.6+ changed weights_only default to True, breaking PyG/OGB serialized files.
+# Monkey-patch to restore legacy behavior across all third-party libraries.
+_original_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs.setdefault('weights_only', False)
+    return _original_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
 from pytorch_lightning.loggers import WandbLogger
 from torchmetrics import AUROC, Accuracy
 
@@ -32,6 +39,7 @@ from utils import (
     MultiAuc,
 )
 from hard_prune_module import hard_prune_api
+from graphgps_prune_module import graphgps_hard_prune_api
 import numpy as np
 import torch_geometric as pyg
 import pickle
@@ -47,68 +55,76 @@ def get_useful_indices(data_list_no_prompt, hard_pruning_mode, hard_pruning_rati
     return useful_indices
 
 def get_effective_indices(params, tasks):
-    indices_path_mode = f"dcgfm_{params.hard_pruning_mode}_{params.hard_pruning_epochs}_{params.hard_pruning_ratio}"
-    effective_indices = [[] for i in range(3)] 
+    reverse_tag = "" if params.hard_pruning_reverse else "_fwd"
+    indices_path_mode = f"dcgfm_{params.hard_pruning_mode}_{params.hard_pruning_epochs}_{params.hard_pruning_ratio}{reverse_tag}"
+    num_tasks = len(tasks.datasets["train"])
+    effective_indices = [[] for i in range(num_tasks)]
     if params.hard_pruning_ratio == 0.0:
-        for i in range(3):
+        for i in range(num_tasks):
             effective_indices[i] = list(range(params.fs_sample_size))
         return effective_indices
-    
+
     data_list_no_prompt, data_list_no_prompt_ind, right_bound = [], [], []
     data_list_no_link = []
-    for i in range(3):
+    for i in range(num_tasks):
         data_list_no_prompt_ind.append(tasks.datasets["train"][i].all_no_prompt_data)
-        right_bound.append((i + 1) * params.fs_sample_size) 
-        if i != 1: 
+        right_bound.append((i + 1) * params.fs_sample_size)
+        if i != 1:
             data_list_no_link.extend(tasks.datasets["train"][i].all_no_prompt_data)
     indices_dir = os.path.join(params.big_data_cache_dir, "hard_pruning_indices")
     if not os.path.exists(indices_dir):
         os.makedirs(indices_dir, exist_ok=True)
-    indices_path_0 = os.path.join(indices_dir, f"{indices_path_mode}_0.pkl")
-    if not os.path.exists(indices_path_0): 
-        if params.hard_pruning_mode == "random": 
+    all_cached = all(
+        os.path.exists(os.path.join(indices_dir, f"{indices_path_mode}_{i}.pkl"))
+        for i in range(num_tasks)
+    )
+    if not all_cached:
+        if params.hard_pruning_mode == "random":
             useful_indices_all = np.sort(np.random.choice(
-                                    params.fs_sample_size * 3, 
-                                    size=int(params.fs_sample_size * 3 * (1.0 - params.hard_pruning_ratio)), 
+                                    params.fs_sample_size * num_tasks,
+                                    size=int(params.fs_sample_size * num_tasks * (1.0 - params.hard_pruning_ratio)),
                                     replace=False
-                                )).tolist()             
-            for i in range(len(useful_indices_all)):
-                if useful_indices_all[i] < right_bound[0]:
-                    effective_indices[0].append(useful_indices_all[i])
-                elif useful_indices_all[i] < right_bound[1]:
-                    effective_indices[1].append(useful_indices_all[i] - right_bound[0])
-                else:
-                    effective_indices[2].append(useful_indices_all[i] - right_bound[1])
-        else:            
-            if params.hard_pruning_joint == True: 
+                                )).tolist()
+            for idx in useful_indices_all:
+                for t in range(num_tasks - 1, -1, -1):
+                    if idx >= right_bound[t - 1] if t > 0 else True:
+                        effective_indices[t].append(idx - (right_bound[t - 1] if t > 0 else 0))
+                        break
+        else:
+            if params.hard_pruning_joint == True:
                 useful_indices_all = get_useful_indices(data_list_no_link, params.hard_pruning_mode, params.hard_pruning_ratio, params.hard_pruning_reverse, params.hard_pruning_epochs)
                 effective_indices[1] = np.sort(np.random.choice(
                                             params.fs_sample_size,
-                                            size=int(params.fs_sample_size * (1.0 - params.hard_pruning_ratio)), 
+                                            size=int(params.fs_sample_size * (1.0 - params.hard_pruning_ratio)),
                                             replace=False
-                                        )).tolist() 
-                for i in range(len(useful_indices_all)):
-                    if useful_indices_all[i] < right_bound[0]:
-                        effective_indices[0].append(useful_indices_all[i])
-                    else: 
-                        effective_indices[2].append(useful_indices_all[i] - right_bound[0])
-            else: 
-                for i in range(3):
+                                        )).tolist()
+                # distribute joint scores across non-link tasks
+                non_link_tasks = [t for t in range(num_tasks) if t != 1]
+                non_link_bounds = [right_bound[t] - right_bound[non_link_tasks[0] - 1] if non_link_tasks[0] > 0 else right_bound[t] for t in non_link_tasks]
+                cum_sizes = [0] + [params.fs_sample_size * (k + 1) for k in range(len(non_link_tasks))]
+                for idx in useful_indices_all:
+                    for k, t in enumerate(non_link_tasks):
+                        if idx < cum_sizes[k + 1]:
+                            effective_indices[t].append(idx - cum_sizes[k])
+                            break
+            else:
+                for i in range(num_tasks):
                     effective_indices[i] = get_useful_indices(data_list_no_prompt_ind[i], params.hard_pruning_mode, params.hard_pruning_ratio, params.hard_pruning_reverse, params.hard_pruning_epochs)
-            for i in range(3):
+            for i in range(num_tasks):
                 effective_indices[i] = np.sort(effective_indices[i]).tolist()
-        
-        for i in range(3):
+
+        for i in range(num_tasks):
             pkl_file_name = os.path.join(indices_dir, f"{indices_path_mode}_{i}.pkl")
             with open(pkl_file_name, "wb") as f:
                 pickle.dump(effective_indices[i], f)
-        
-    else: 
-        for i in range(3):
+
+    else:
+        for i in range(num_tasks):
             file_name = os.path.join(indices_dir, f"{indices_path_mode}_{i}.pkl")
             with open(file_name, "rb") as f:
                 effective_indices[i] = pickle.load(f)
     return effective_indices
+
 
 def main(params):
     """
@@ -129,7 +145,7 @@ def main(params):
     encoder = SentenceEncoder(params.llm_name, batch_size=params.llm_b_size)
 
     task_config_lookup = load_yaml(
-        os.path.join(os.path.dirname(__file__), "configs", "task_config.yaml")
+        os.path.join(os.path.dirname(__file__), params.task_config)
     )
     data_config_lookup = load_yaml(os.path.join(os.path.dirname(__file__), "configs", "data_config.yaml"))
 
@@ -160,7 +176,7 @@ def main(params):
     """
     current_effective_indices = get_effective_indices(params, tasks)
     
-    for i in range(3):
+    for i in range(len(current_effective_indices)):
         tasks.datasets["train"][i].effective_indices = current_effective_indices[i]
     
     if encoder is not None:
@@ -295,6 +311,7 @@ def main(params):
         cktp_prefix=params.big_data_cache_dir + "/" + params.exp_name,
         checkpoint_interval=params.checkpoint_interval,
         fs_sample_size=params.fs_sample_size,
+        ckpt_path=params.ckpt_path,
     )
 
 if __name__ == "__main__":
@@ -332,6 +349,8 @@ if __name__ == "__main__":
     
     parser.add_argument('--hard_pruning_joint', action='store_true', help='Hard pruning joint')
     parser.add_argument('--hard_pruning_reverse', action='store_true', help='Hard pruning reverse')
+    parser.add_argument('--ckpt_path', type=str, default=None, help='Path to checkpoint to resume training from')
+    parser.add_argument('--task_config', type=str, default='configs/task_config.yaml', help='Path to task config YAML (relative to OFA/)')
 
     params = parser.parse_args()
     configs = []

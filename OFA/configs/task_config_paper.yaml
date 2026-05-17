@@ -1,0 +1,92 @@
+# task_config_paper.yaml
+# Reproduces EXACTLY the 6-dataset evaluation in Table 1 of the DCGFM paper (KDD 2025).
+#
+# N-way settings per paper Appendix A.3:
+#   ogbn-arxiv  : N=5  → arxiv_fs_50  (name = N_way=5, k_shot=0)
+#   PubMed      : N=3  → pubmed_fs_30 (name = N_way=3, k_shot=0)
+#   PCBA        : N=2  → chempcba_fs_20
+#   HIV         : N=2  → chemhiv_fs_20
+#   FB15K237    : N=20 → FB15K237_fs_200 (name = N_way=20, k_shot=0)
+#   WN18RR      : N=10 → WN18RR_fs_100  (name = N_way=10, k_shot=0)
+#
+# Original task_config.yaml is NOT modified.
+# Use with: python run_cdm.py --task_config configs/task_config_paper.yaml ...
+
+# ── arxiv_fs task: tests arxiv (N=5) + PubMed (N=3) ──────────────────────────
+arxiv_fs:
+  eval_pool_mode: mean
+  eval_set_constructs:
+    - stage: train
+      split_name: train
+      dataset: arxiv_fs
+
+    # ── paper's ogbn-arxiv metric: N=5, k=0 ──────────────────────────────────
+    - stage: test
+      split_name: test
+      dataset: arxiv_fs_50        # N_way=5, k_shot=0
+
+    # ── paper's PubMed metric: N=3, k=0 ──────────────────────────────────────
+    - stage: test
+      split_name: test
+      dataset: pubmed_fs_30       # N_way=3, k_shot=0
+
+    # ── commented out: extra N-way settings not in paper's Table 1 ────────────
+    # - stage: test
+    #   split_name: test
+    #   dataset: arxiv_fs_30      # N_way=3, k_shot=0  (extra)
+    # - stage: test
+    #   split_name: test
+    #   dataset: cora_fs_20       # N_way=2, k_shot=0  (extra)
+    # - stage: test
+    #   split_name: test
+    #   dataset: cora_fs_70       # N_way=7, k_shot=0  (extra)
+    # - stage: test
+    #   split_name: test
+    #   dataset: wikics_fs_100    # N_way=10, k_shot=0 (extra)
+
+
+# ── FB15K237_fs task: tests FB15K237 (N=20) + WN18RR (N=10) ─────────────────
+FB15K237_fs:
+  eval_pool_mode: mean
+  eval_set_constructs:
+    - stage: train
+      split_name: train
+      dataset: FB15K237_fs
+
+    # ── paper's FB15K237 metric: N=20, k=0 ───────────────────────────────────
+    - stage: test
+      split_name: test
+      dataset: FB15K237_fs_200    # N_way=20, k_shot=0
+
+    # ── paper's WN18RR metric: N=10, k=0 ─────────────────────────────────────
+    - stage: test
+      split_name: test
+      dataset: WN18RR_fs_100      # N_way=10, k_shot=0
+
+    # ── commented out: extra N-way settings not in paper's Table 1 ────────────
+    # - stage: test
+    #   split_name: test
+    #   dataset: FB15K237_fs_100  # N_way=10, k_shot=0 (extra)
+    # - stage: test
+    #   split_name: test
+    #   dataset: WN18RR_fs_50     # N_way=5,  k_shot=0 (extra)
+
+
+# ── mol_fs task: tests HIV (N=2) + PCBA (N=2) ────────────────────────────────
+# These are already the paper's exact settings — no changes needed.
+mol_fs:
+  eval_pool_mode: mean
+  eval_set_constructs:
+    - stage: train
+      split_name: train
+      dataset: chemblpre_fs
+
+    # ── paper's HIV metric: N=2, k=0 ─────────────────────────────────────────
+    - stage: test
+      split_name: test
+      dataset: chemhiv_fs_20      # N_way=2, k_shot=0
+
+    # ── paper's PCBA metric: N=2, k=0 ────────────────────────────────────────
+    - stage: test
+      split_name: test
+      dataset: chempcba_fs_20     # N_way=2, k_shot=0
