@@ -217,10 +217,29 @@ All experiments below use **far-center pruning** (`hard_pruning_reverse: false`)
 
 ---
 
-### 12. VN GIN 10 layers — All Datasets (In Progress)
-**Dirs:** `2026-05-17_09-04-16`, `2026-05-17_17-26-50`, `2026-05-17_17-28-36`
+### 12. VN GIN 10 layers — All Datasets
+**Dir:** `2026-05-17_17-28-36 vn full gin10L`
 
-Results pending.
+| Setting | Value |
+|---|---|
+| GNN | RGCN-Edge, 10 layers + virtual node |
+| Hard pruning | 70%, far-center |
+| Soft pruning | 30% |
+
+| Metric | Score |
+|---|---|
+| test_arxiv_fs_50 / acc | 0.3581 ± 0.0046 |
+| test_arxiv_fs_30 / acc | 0.5137 ± 0.0068 |
+| test_cora_fs_20 / acc | **0.5557 ± 0.0080** |
+| test_cora_fs_70 / acc | 0.2020 ± 0.0080 |
+| test_pubmed_fs_30 / acc | 0.3424 ± 0.0099 |
+| test_wikics_fs_100 / acc | 0.1242 ± 0.0040 |
+| test_FB15K237_fs_100 / acc | **0.5473 ± 0.0135** |
+| test_FB15K237_fs_200 / acc | **0.4106 ± 0.0110** |
+| test_WN18RR_fs_50 / acc | 0.2404 ± 0.0093 |
+| test_WN18RR_fs_100 / acc | 0.1471 ± 0.0053 |
+| test_chemhiv_fs_20 / auc | 0.5585 ± 0.0109 |
+| test_chempcba_fs_20 / aucmulti | 0.4874 ± 0.0101 |
 
 ---
 
@@ -235,3 +254,4 @@ Results pending.
 | Adaptive-depth 20L | 0.5525 | 0.5200 |
 | VN 10L (mol only) | 0.5581 | 0.5409 |
 | VN 5L (all datasets) | 0.5211 | — |
+| VN 10L (all datasets) | 0.5585 | 0.4874 |

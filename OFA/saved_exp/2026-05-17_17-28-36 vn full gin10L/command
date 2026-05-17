@@ -59,3 +59,18 @@ test_rep: 10
 train_sample_size: -1
 use_onecycle: false
 val_interval: 1
+
+
+test_arxiv_fs_50\loss/dataloader_idx_0:1.432021±0.018207
+test_arxiv_fs_50\acc:0.358050±0.004585
+test_arxiv_fs_30\acc:0.513650±0.006812
+test_cora_fs_20\acc:0.555650±0.008019
+test_cora_fs_70\acc:0.202000±0.008019
+test_pubmed_fs_30\acc:0.342400±0.009884
+test_wikics_fs_100\acc:0.124150±0.003969
+test_FB15K237_fs_100\acc:0.547250±0.013543
+test_FB15K237_fs_200\acc:0.410550±0.011037
+test_WN18RR_fs_50\acc:0.240350±0.009306
+test_WN18RR_fs_100\acc:0.147100±0.005281
+test_chemhiv_fs_20\auc:0.558494±0.010943
+test_chempcba_fs_20\aucmulti:0.487364±0.010139
