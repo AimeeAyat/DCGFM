@@ -1,6 +1,8 @@
 import argparse
 import os
+import json
 from types import SimpleNamespace
+import numpy as np
 import torch
 
 # PyTorch 2.6+ changed weights_only default to True, breaking PyG/OGB serialized files.
@@ -351,6 +353,7 @@ if __name__ == "__main__":
     parser.add_argument('--hard_pruning_reverse', action='store_true', help='Hard pruning reverse')
     parser.add_argument('--ckpt_path', type=str, default=None, help='Path to checkpoint to resume training from')
     parser.add_argument('--task_config', type=str, default='configs/task_config.yaml', help='Path to task config YAML (relative to OFA/)')
+    parser.add_argument('--exp_label', type=str, default='', help='Descriptive label appended to experiment directory name')
 
     params = parser.parse_args()
     configs = []
@@ -377,7 +380,23 @@ if __name__ == "__main__":
     }
     
     mod_params.update(new_params)
-    setup_exp(mod_params)   
+    setup_exp(mod_params)
+    if mod_params.get('exp_label'):
+        new_dir = mod_params["exp_dir"] + " " + mod_params["exp_label"]
+        os.rename(mod_params["exp_dir"], new_dir)
+        mod_params["exp_dir"] = new_dir
+
+    # Save results.json at end of training
+    import gp.lightning.training as _tr
+    _orig_s = _tr.dict_res_summary
+    _edir = mod_params["exp_dir"]
+    def _save_results(test_col):
+        res = _orig_s(test_col)
+        with open(os.path.join(_edir, "results.json"), "w") as f:
+            json.dump({k: {"mean": float(np.mean(v)), "std": float(np.std(v))} for k, v in res.items()}, f, indent=2)
+        print(f"\nResults saved to {_edir}/results.json")
+        return res
+    _tr.dict_res_summary = _save_results
 
     params = SimpleNamespace(**mod_params)
     set_random_seed(params.seed)

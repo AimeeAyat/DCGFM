@@ -6,11 +6,7 @@ ckpt_path: null
 control_gpu: false
 d_min_ratio:
 - 1
-- 1
-- 1
 d_multiple:
-- 1
-- 1
 - 1
 data_path: null
 delta: 1.0
@@ -19,7 +15,7 @@ dropout: 0.1
 emb_dim: 768
 eval_batch_size: 256
 eval_sample_size: -1
-exp_name: OFA_vn_full_
+exp_name: OFA_mol_moe_small_
 final_div: 10000
 fs_sample_size: 60000
 gpus: 0,1
@@ -38,22 +34,20 @@ lr: 0.0005
 max_lr: 0.05
 max_nodes_per_hop: 100
 num_bases: 4
-num_epochs: 30
-num_layers: 10
+num_epochs: 50
+num_layers: 3
 num_workers: 0
 offline_log: false
 opts: []
-override: yamls/soft_and_hard_vn_full.yaml
+override: yamls/soft_and_hard_mol_moe.yaml
 pct_start: 0.3
 prune_ratio: 0.3
 reload_freq: 0
 rwpe: null
-save_model: false
+save_model: true
 seed: 1
 task_config: configs/task_config.yaml
 task_names:
-- arxiv_fs
-- FB15K237_fs
 - mol_fs
 test_rep: 10
 train_sample_size: -1

@@ -74,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--hard_pruning_reverse",action="store_true")
     parser.add_argument("--ckpt_path",           type=str,   default=None)
     parser.add_argument("--task_config",         type=str,   default="configs/task_config.yaml")
+    parser.add_argument("--exp_label",           type=str,   default="", help="Descriptive label appended to the experiment directory name")
 
     params = parser.parse_args()
     configs = [load_yaml(os.path.join(os.path.dirname(__file__), "configs", "default_config.yaml"))]
@@ -85,7 +86,12 @@ if __name__ == "__main__":
     mod_params.update({k: v for k, v in vars(params).items() if k not in mod_params})
 
     setup_exp(mod_params)
-    _exp_dir[0] = mod_params["exp_dir"]   # wire up the results-save path
+    if params.exp_label:
+        import os as _os
+        new_dir = mod_params["exp_dir"] + " " + params.exp_label
+        _os.rename(mod_params["exp_dir"], new_dir)
+        mod_params["exp_dir"] = new_dir
+    _exp_dir[0] = mod_params["exp_dir"]
     params = SimpleNamespace(**mod_params)
     set_random_seed(params.seed)
 

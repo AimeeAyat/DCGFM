@@ -20,13 +20,28 @@ import torch
 # ── Patch run_cdm's GNN class BEFORE calling main() ─────────────────────────
 # run_cdm.main() looks up PyGRGCNEdge from its own module globals at call time,
 # so replacing the name here redirects it to the residual variant.
+import json
+import numpy as np
 import run_cdm
 from models.model_deep import PyGRGCNEdgeDeep
 
 run_cdm.PyGRGCNEdge = PyGRGCNEdgeDeep
-# ─────────────────────────────────────────────────────────────────────────────
 
 from gp.utils.utils import load_yaml, combine_dict, merge_mod, setup_exp, set_random_seed
+import gp.lightning.training as _training
+
+_orig_summary = _training.dict_res_summary
+_exp_dir = [None]
+
+def _summary_and_save(test_col):
+    res = _orig_summary(test_col)
+    results = {k: {"mean": float(np.mean(v)), "std": float(np.std(v))} for k, v in res.items()}
+    with open(os.path.join(_exp_dir[0], "results.json"), "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"\nResults saved to {_exp_dir[0]}/results.json")
+    return res
+
+_training.dict_res_summary = _summary_and_save
 
 
 if __name__ == "__main__":
@@ -59,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--hard_pruning_reverse", action="store_true")
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--task_config", type=str, default="configs/task_config.yaml")
+    parser.add_argument("--exp_label",   type=str, default="", help="Descriptive label appended to the experiment directory name")
 
     params = parser.parse_args()
     configs = [load_yaml(os.path.join(os.path.dirname(__file__), "configs", "default_config.yaml"))]
@@ -71,6 +87,11 @@ if __name__ == "__main__":
     mod_params.update({k: v for k, v in vars(params).items() if k not in mod_params})
 
     setup_exp(mod_params)
+    if params.exp_label:
+        new_dir = mod_params["exp_dir"] + " " + params.exp_label
+        os.rename(mod_params["exp_dir"], new_dir)
+        mod_params["exp_dir"] = new_dir
+    _exp_dir[0] = mod_params["exp_dir"]
 
     params = SimpleNamespace(**mod_params)
     set_random_seed(params.seed)

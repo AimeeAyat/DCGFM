@@ -1,0 +1,50 @@
+{
+  "test_arxiv_fs_50\\acc": {
+    "mean": 0.459100,
+    "std": 0.008780
+  },
+  "test_arxiv_fs_30\\acc": {
+    "mean": 0.605900,
+    "std": 0.006826
+  },
+  "test_cora_fs_20\\acc": {
+    "mean": 0.524150,
+    "std": 0.013390
+  },
+  "test_cora_fs_70\\acc": {
+    "mean": 0.151650,
+    "std": 0.006738
+  },
+  "test_pubmed_fs_30\\acc": {
+    "mean": 0.311350,
+    "std": 0.013314
+  },
+  "test_wikics_fs_100\\acc": {
+    "mean": 0.102800,
+    "std": 0.006038
+  },
+  "test_FB15K237_fs_100\\acc": {
+    "mean": 0.517350,
+    "std": 0.013377
+  },
+  "test_FB15K237_fs_200\\acc": {
+    "mean": 0.368400,
+    "std": 0.009954
+  },
+  "test_WN18RR_fs_50\\acc": {
+    "mean": 0.222450,
+    "std": 0.005194
+  },
+  "test_WN18RR_fs_100\\acc": {
+    "mean": 0.109650,
+    "std": 0.006329
+  },
+  "test_chemhiv_fs_20\\auc": {
+    "mean": 0.482478,
+    "std": 0.016905
+  },
+  "test_chempcba_fs_20\\aucmulti": {
+    "mean": 0.542143,
+    "std": 0.009189
+  }
+}

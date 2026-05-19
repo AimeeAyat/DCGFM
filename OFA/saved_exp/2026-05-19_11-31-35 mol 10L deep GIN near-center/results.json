@@ -1,0 +1,14 @@
+{
+  "test_chemhiv_fs_20\\loss/dataloader_idx_0": {
+    "mean": 0.958831,
+    "std": 0.013075
+  },
+  "test_chemhiv_fs_20\\auc": {
+    "mean": 0.549057,
+    "std": 0.013573
+  },
+  "test_chempcba_fs_20\\aucmulti": {
+    "mean": 0.506349,
+    "std": 0.008966
+  }
+}
