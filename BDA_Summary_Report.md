@@ -5,9 +5,37 @@
 
 ## 1. Problem Statement
 
-The original DCGFM (KDD 2025) is a multi-task graph foundation model trained jointly on three graph domains: citation networks (arxiv, Cora, PubMed, WikiCS), knowledge graphs (FB15K237, WN18RR), and molecular graphs (chemblpre, chemhiv, chempcba). It employs two pruning mechanisms:
+The original DCGFM (KDD 2025) is a multi-task graph foundation model which jointly trains on Node, Link and Graph datasets for zero-shot graph learning transfer.In the **zero-shot transfer** setting: the model learns on one set of graphs and is evaluated on structurally different, held-out datasets. It is important to distinguish training datasets from test datasets — the model never sees test datasets during training. 
 
-- **Hard pruning (Deep SVDD)**: removes 70% of training graphs using anomaly scores from a GIN-based autoencoder. A single hypersphere centre is fit to all graphs; graphs far from the centre (structurally unusual) are removed, keeping the 30% most representative.
+### Training Datasets (seen during pre-training)
+
+| Domain | Dataset | Size | Task |
+|---|---|---|---|
+| Citation | ogbn-arxiv | 169,343 nodes, sampled to **60k subgraphs** | Node classification |
+| Knowledge Graph | FB15K237 | 310,116 triples, sampled to **60k subgraphs** | Link prediction |
+| Molecular | chemblpre | 364,181 molecules, sampled to **60k graphs** | Graph classification |
+
+After hard pruning (70% removed): ~18k graphs per domain used per training run.
+
+### Test Datasets (never seen during training — zero-shot transfer)
+
+| Domain | Dataset | Size | Evaluation | Transfer type |
+|---|---|---|---|---|
+| Citation | Cora | 2,708 nodes | 2/7-way few-shot node cls | Zero-shot (different graph) |
+| Citation | PubMed | 19,717 nodes | 3-way few-shot node cls | Zero-shot (different graph) |
+| Citation | WikiCS | 11,701 nodes | 10-way few-shot node cls | Zero-shot (different graph) |
+| Knowledge Graph | **FB15K237** | 237 relations, 310k triples | 10/20-way few-shot link pred | Same KG, held-out test triples |
+| Knowledge Graph | WN18RR | 11 relations, 93k triples | 5/10-way few-shot link pred | Zero-shot (different KG) |
+| Molecular | **chemhiv** | **41,127 molecules** | 2-way few-shot (HIV active/inactive) | Zero-shot (different dataset) |
+| Molecular | **chempcba** | **437,929 molecules** | 2-way few-shot (128 assays) | Zero-shot (different dataset) |
+
+The model trains on chemblpre but is **never shown** chemhiv or chempcba during training. At test time, N randomly sampled labeled molecules (support set) are given as context, and the model must predict unlabeled query molecules. This is why architecture and data quality choices during training matter — the model must learn transferable molecular representations from chemblpre that generalise to unseen biological activity datasets.
+
+### Pruning Mechanisms
+
+Both pruning mechanisms apply **only to training data**:
+
+- **Hard pruning (Deep SVDD)**: removes 70% of training graphs using anomaly scores from a GIN-based autoencoder. A single hypersphere centre is fit to all graphs; **graphs near the centre (common/redundant structures) are removed**, keeping the 30% most structurally diverse. This study also explored the reverse — removing far-from-centre graphs instead — as detailed in Section 2.2.
 - **Soft pruning (InfoBatch)**: dynamically removes well-learned samples each epoch.
 
 The original pipeline uses a single 5-layer RGCN-Edge GNN shared across all tasks. While it achieves reasonable aggregate performance, analysis of per-domain results reveals a critical limitation:
@@ -24,7 +52,7 @@ The original pipeline uses a single 5-layer RGCN-Edge GNN shared across all task
 
 ### 2.1 Molecular Hop Distribution
 
-A diameter analysis (`mol_hop_analysis.py`) was conducted across all three molecular datasets:
+A diameter analysis (`mol_hop_analysis.py`) was conducted across all three molecular datasets (chemblpre = training; chemhiv and chempcba = test-only, analysed here to understand the structural distribution the model is evaluated on):
 
 | Dataset | Min | Max | Mean | Median | ≤10 hops | >10 hops |
 |---|---|---|---|---|---|---|
