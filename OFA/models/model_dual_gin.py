@@ -53,9 +53,8 @@ class DualVNGINModel(nn.Module):
         dropout  : float = 0.1,
         **kwargs,
     ):
-        # threshold is set post-init by run_cdm_dual after computing from data
-        self._threshold = DIAMETER_THRESHOLD
         super().__init__()
+        self._threshold = DIAMETER_THRESHOLD   # set after super().__init__()
         self.llm_proj = nn.Linear(LLM_DIM_DICT[llm_name], outdim)
 
         # GIN 1 — small-diameter specialist (diameter ≤ 13)
