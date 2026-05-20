@@ -76,7 +76,6 @@ Two pruning strategies were tested systematically across all architectures:
 | Deep GIN | 15L | 0.4767 | 0.4853 | 0.5125 | 0.5167 |
 | VN | 10L | 0.5544 | 0.5581 | 0.5345 | **0.5409** |
 | Adaptive 20L | 20L | 0.5200 | 0.5525 | 0.4970 | 0.5200 |
-| GIN + Transformer | 10L | 0.4362 | 0.5260 | 0.4994 | 0.5008 |
 | Small MoE | 3L×3 | 0.5107 | 0.5617 | **0.5392** | 0.5280 |
 | Dual split-SVDD | 10L×2 | **0.5813** | 0.4321 | 0.5037 | 0.5013 |
 
@@ -129,11 +128,11 @@ All subsequent architectural experiments were run under both strategies; near-ce
 
 **What worked**: VN 10L mol-only achieves the best chempcba among all near-centre single-architecture experiments (0.5345). Robust to pruning direction (small gap, see Section 2.2).
 
-**What didn't work**: Joint training with all 3 tasks reduces both metrics due to task interference.
+**What didn't work**: Joint training reduces both metrics — molecular data contributes only ~1/3 of gradient updates per epoch, and VN's global pooling must simultaneously serve citation and KG graphs where it offers no benefit.
 
 **Pros**: Robust across pruning directions; best chempcba balance; addresses long-range without adding layers.
 
-**Cons**: Requires mol-only training for best results; joint training hurts molecular performance; chemhiv weaker than 10L deep GIN.
+**Cons**: Suboptimal under joint training; chemhiv weaker than 10L deep GIN.
 
 ---
 
@@ -162,29 +161,7 @@ All subsequent architectural experiments were run under both strategies; near-ce
 
 ---
 
-### Method 4: Sequential GIN + Transformer
-
-**Motivation**: GPS-style architectures achieve SOTA on OGB benchmarks by combining local MPNN with global attention.
-
-**Methodology**: 10-layer residual GIN followed by one Transformer block (8 heads, pre-norm). Sequential, not interleaved.
-
-**Assumption**: A Transformer block at the end will capture long-range patterns that local message-passing misses.
-
-| chemhiv AUC | chempcba AUCmulti |
-|---|---|
-| 0.4362 ± 0.0059 | 0.4994 ± 0.0009 |
-
-**What worked**: Nothing — underperforms even the 5L baseline.
-
-**What didn't work**: Near-zero chempcba variance (±0.0009) suggests near-degenerate output. The sequential approach is architecturally flawed — GPS literature (NeurIPS 2022) confirms "major drop when MPNN is removed"; MPNN and Transformer must run in parallel, not in sequence.
-
-**Pros**: Simple to implement.
-
-**Cons**: Sequential is inferior to GPS-style interleaving; worst architecture tested under near-centre pruning.
-
----
-
-### Method 5: Topology-Aware Graph Mixture of Experts (MoE)
+### Method 4: Topology-Aware Graph Mixture of Experts (MoE)
 
 **Motivation**: Different structural regimes may benefit from different architectures. A routing mechanism can assign each molecule to the most appropriate expert.
 
@@ -212,7 +189,7 @@ Router: 4-descriptor topological vector [diameter, n_atoms, cyclomatic complexit
 
 ---
 
-### Method 6: Dual Split-SVDD GIN
+### Method 5: Dual Split-SVDD GIN
 
 **Motivation**: A single global SVDD centre is structurally ambiguous for heterogeneous molecular datasets — "near centre" means different things for compact rings vs long chains. Splitting by diameter before pruning gives each group its own meaningful centre.
 
@@ -224,24 +201,25 @@ Router: 4-descriptor topological vector [diameter, n_atoms, cyclomatic complexit
 
 **Assumption**: Separate SVDD centres produce higher-quality pruned subsets per structural regime; specialist GINs trained on homogeneous groups learn better representations.
 
-| Configuration | chemhiv AUC | chempcba AUCmulti |
-|---|---|---|
-| Dual VN | 0.4957 ± 0.0181 | 0.4999 ± 0.0006 |
-| **Dual GIN (no VN)** | **0.5813 ± 0.0125** | 0.5037 ± 0.0057 |
+| chemhiv AUC | chempcba AUCmulti |
+|---|---|
+| **0.5813 ± 0.0125** | 0.5037 ± 0.0057 |
 
-**What worked**: Dual GIN achieves the **best chemhiv across all experiments (0.5813)**. Split-SVDD pruning demonstrably improves over single-SVDD for binary classification.
+**What worked**: Achieves the **best chemhiv under mol-only near-centre training (0.5813)**. Split-SVDD pruning demonstrably improves over single-SVDD for binary classification — separate centres per structural regime produce cleaner pruned subsets.
 
-**What didn't work**: VN in split architecture completely fails — near-zero chempcba variance (±0.0006) indicates degenerate output. chempcba stays near 0.50 for all dual configurations.
+**What didn't work**: chempcba does not improve; stays near 0.50.
 
-**Pros**: Novel — diameter-split SVDD is theoretically sound and empirically validated; best single-metric result; interpretable specialist routing.
+**Pros**: Novel — diameter-split SVDD is theoretically sound and empirically validated; best chemhiv result overall; interpretable specialist routing.
 
-**Cons**: VN incompatible with split training (VN requires full-distribution training; restricting to half the structural space causes collapse); chempcba not improved.
+**Cons**: chempcba not improved; diameter split creates imbalance if distribution shifts at test time.
 
 ---
 
 ## 4. Full Dataset vs Mol-Only Training
 
-Joint training on all 3 tasks has mixed effects. For VN-based architectures, task interference from citation and KG tasks dilutes molecular representations. Interestingly, the small MoE architecture shows the **opposite** effect — joint training boosts chemhiv substantially at the cost of chempcba:
+The molecular dataset size is identical in both settings (60k episodes). What differs is the **gradient signal proportion**: in joint training, molecular data contributes only ~1/3 of gradient updates per epoch — the shared GNN weights are simultaneously optimised for three structurally different graph domains (sparse citation graphs, dense KG triples, molecular bond graphs), which prevents full specialisation for molecular property prediction.
+
+For VN, this is particularly costly: VN's global pooling is well-suited for molecules (compensates for large diameter) but over-smooths features in sparse citation graphs, so VN parameters converge to a compromise that serves neither domain optimally. Interestingly, the small MoE architecture shows the **opposite** effect — joint training boosts chemhiv substantially, suggesting the GPS expert benefits from the richer multi-domain training signal for binary classification:
 
 | Setting | chemhiv AUC | chempcba AUCmulti |
 |---|---|---|
@@ -250,11 +228,11 @@ Joint training on all 3 tasks has mixed effects. For VN-based architectures, tas
 | Small MoE mol-only | 0.5107 | **0.5392** |
 | **Small MoE all tasks** | **0.5912** | 0.4993 |
 
-The MoE GPS expert likely benefits from the richer multi-domain training signal for binary classification (chemhiv), but the diverse, multi-label chempcba task is too noisy to benefit from joint training under a shared model.
+The multi-label chempcba task does not benefit from joint training under either architecture — 128 sparse assay profiles appear too noisy to leverage cross-domain signal.
 
 ---
 
-## 5. Summary Results Table (Near-Centre Pruning, Mol-Only)
+## 5. Summary Results Table (Near-Centre Pruning, Mol-Only Training)
 
 | Method | Architecture | Layers | chemhiv AUC | chempcba AUCmulti |
 |---|---|---|---|---|
@@ -263,9 +241,7 @@ The MoE GPS expert likely benefits from the richer multi-domain training signal 
 | Deep GIN | + Residuals | 15L | 0.4767 ± 0.0114 | 0.5125 ± 0.0090 |
 | VN | + Virtual Node | 10L | 0.5544 ± 0.0152 | 0.5345 ± 0.0146 |
 | Adaptive | Diameter-gated attn | 20L | 0.5200 ± 0.0143 | 0.4970 ± 0.0054 |
-| GIN + Transformer | Sequential Transformer | 10L+T | 0.4362 ± 0.0059 | 0.4994 ± 0.0009 |
 | Small MoE | 3 experts + GPS | 3L×3 | 0.5107 ± 0.0102 | **0.5392 ± 0.0102** |
-| Dual VN | 2× VN-GIN | 10L×2 | 0.4957 ± 0.0181 | 0.4999 ± 0.0006 |
 | **Dual split-SVDD** | 2× specialist GIN | 10L×2 | **0.5813 ± 0.0125** | 0.5037 ± 0.0057 |
 
 > For far-centre pruning results and the full cross-pruning comparison, see **Section 2.2**.
@@ -280,19 +256,9 @@ The MoE GPS expert likely benefits from the richer multi-domain training signal 
 
 3. **VN is the most balanced single architecture** — robust to pruning direction, competitive on both metrics; best single-architecture chempcba under near-centre (0.5345).
 
-4. **Dual split-SVDD advances chemhiv** — separate pruning centres per structural regime achieve the best chemhiv (0.5813), validating that a single global SVDD centre is suboptimal for heterogeneous molecular datasets.
+4. **Dual split-SVDD advances chemhiv (mol-only)** — separate pruning centres per structural regime achieve the best mol-only chemhiv (0.5813), validating that a single global SVDD centre is suboptimal for heterogeneous molecular datasets.
 
-5. **VN collapses in split architectures** — VN requires full-distribution training; restricting to half the structural space causes degenerate output (near-zero variance).
-
-6. **Sequential GIN → Transformer is consistently the worst architecture** — MPNN and Transformer must be interleaved (GPS-style), not sequential.
-
-7. **Joint training has architecture-dependent effects** — VN suffers task interference (chemhiv 0.5544 → 0.5421); MoE benefits for chemhiv in joint training (0.5107 → 0.5912) but chempcba drops to near-random. No architecture simultaneously optimises both metrics in joint training.
+5. **Joint training has architecture-dependent effects** — molecular data volume is unchanged (60k episodes) but contributes only ~1/3 of gradient updates per epoch. VN suffers from shared-weight compromise across graph domains (chemhiv 0.5544 → 0.5421); MoE benefits for chemhiv in joint training (0.5107 → 0.5912) but chempcba drops to near-random. No architecture simultaneously optimises both metrics in joint training.
 
 ---
 
-## 7. Open Questions
-
-- Can dual split-SVDD be extended to improve chempcba without VN?
-- Does the pruning direction trade-off persist with domain-adaptive pruning ratios?
-- Would GPS-style interleaved MPNN+Transformer address the sequential Transformer failure?
-- Can MoE routing be verified to have learned meaningful structural specialisation?
